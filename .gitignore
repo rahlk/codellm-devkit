@@ -13,4 +13,4 @@ pytest.ini
 
 # Poetry
 .poetry/
-.poetry.lock
+poetry.lock
