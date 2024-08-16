@@ -9,7 +9,9 @@ from subprocess import CompletedProcess
 from urllib.request import urlretrieve
 from datetime import datetime
 from importlib import resources
+import tempfile
 
+from ipdb import set_trace
 from networkx import DiGraph
 
 from cldk.analysis.java.treesitter import JavaSitter
@@ -65,13 +67,13 @@ class JCodeanalyzer:
         self.use_graalvm_binary = use_graalvm_binary
         self.eager_analysis = eager_analysis
         self.analysis_level = analysis_level
-        self.application = self._init_codeanalyzer(analysis_level=1 if analysis_level == 'symbol_table' else 2)
+        # Initialize to None, this will be populated lazily when the application view is requested.
+        self.application = None
         # Attributes related the Java code analysis...
-        if analysis_level == 'symbol_table':
+        if analysis_level == "symbol_table":
             self.call_graph: DiGraph | None = None
         else:
             self.call_graph: DiGraph = self._generate_call_graph(using_symbol_table=False)
-
 
     @staticmethod
     def _download_or_update_code_analyzer(filepath: Path) -> str:
@@ -143,7 +145,10 @@ class JCodeanalyzer:
             The application view of the Java code.
         """
         if self.application is None:
-            self.application = self._init_codeanalyzer()
+            if self.source_code:
+                self.application = self._codeanalyzer_single_file()
+            else:
+                self.application = self._init_codeanalyzer()
         return self.application
 
     def _get_codeanalyzer_exec(self) -> List[str]:
@@ -170,14 +175,14 @@ class JCodeanalyzer:
             if self.analysis_backend_path:
                 analysis_backend_path = Path(self.analysis_backend_path)
                 logger.info(f"Using codeanalyzer.jar from {analysis_backend_path}")
-                codeanalyzer_exec = shlex.split(f"java -jar {analysis_backend_path / 'codeanalyzer.jar'}")
+                codeanalyzer_exec = shlex.split(f"java -jar {analysis_backend_path / 'codeanalyzer.jar'} -v")
             else:
                 # Since the path to codeanalyzer.jar was not provided, we'll download the latest version from GitHub.
                 with resources.as_file(resources.files("cldk.analysis.java.codeanalyzer.jar")) as codeanalyzer_jar_path:
                     # Download the codeanalyzer jar if it doesn't exist, update if it's outdated,
                     # do nothing if it's up-to-date.
                     codeanalyzer_jar_file = self._download_or_update_code_analyzer(codeanalyzer_jar_path)
-                    codeanalyzer_exec = shlex.split(f"java -jar {codeanalyzer_jar_file}")
+                    codeanalyzer_exec = shlex.split(f"java -jar {codeanalyzer_jar_file} -v")
         return codeanalyzer_exec
 
     def _init_codeanalyzer(self, analysis_level=1) -> JApplication:
@@ -232,6 +237,7 @@ class JCodeanalyzer:
                 except Exception as e:
                     raise CodeanalyzerExecutionException(str(e)) from e
 
+            logger.info(f"Reading analysis from {analysis_json_path_file}")
             with open(analysis_json_path_file) as f:
                 data = json.load(f)
                 return JApplication(**data)
@@ -246,18 +252,25 @@ class JCodeanalyzer:
             The application view of the Java code with the analysis results.
         """
         # self.source_code: str = re.sub(r"[\r\n\t\f\v]+", lambda x: " " if x.group() in "\t\f\v" else " ", self.source_code)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".java", delete=False) as temp_file:
+            temp_file.write(self.source_code)
+            temp_file_path = temp_file.name
+
         codeanalyzer_exec = self._get_codeanalyzer_exec()
-        codeanalyzer_args = ["--source-analysis", self.source_code]
+        codeanalyzer_args = [f"--source-analysis=@{temp_file_path}"]
         codeanalyzer_cmd = codeanalyzer_exec + codeanalyzer_args
         try:
             print(f"Running {' '.join(codeanalyzer_cmd)}")
             logger.info(f"Running {' '.join(codeanalyzer_cmd)}")
-            console_out: CompletedProcess[str] = subprocess.run(codeanalyzer_cmd, capture_output=True, text=True, check=True)
+            console_out: CompletedProcess[str] = subprocess.run(" ".join(codeanalyzer_cmd), capture_output=True, shell=True)
+            set_trace()
             if console_out.returncode != 0:
                 raise CodeanalyzerExecutionException(console_out.stderr)
             return JApplication(**json.loads(console_out.stdout))
         except Exception as e:
             raise CodeanalyzerExecutionException(str(e)) from e
+        finally:
+            os.unlink(temp_file_path)
 
     def get_symbol_table(self) -> Dict[str, JCompilationUnit]:
         """
@@ -269,7 +282,10 @@ class JCodeanalyzer:
             The symbol table of the Java code.
         """
         if self.application is None:
-            self.application = self._init_codeanalyzer()
+            if self.source_code:
+                self.application = self._codeanalyzer_single_file()
+            else:
+                self.application = self._init_codeanalyzer()
         return self.application.symbol_table
 
     def get_application_view(self) -> JApplication:
@@ -722,8 +738,7 @@ class JCodeanalyzer:
         if method_name is None:
             filter_criteria = {node for node in self.call_graph.nodes if node[1] == qualified_class_name}
         else:
-            filter_criteria = {node for node in self.call_graph.nodes if
-                               tuple(node) == (method_name, qualified_class_name)}
+            filter_criteria = {node for node in self.call_graph.nodes if tuple(node) == (method_name, qualified_class_name)}
 
         graph_edges: List[Tuple[JMethodDetail, JMethodDetail]] = list()
         for edge in self.call_graph.edges(nbunch=filter_criteria):

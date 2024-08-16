@@ -102,10 +102,10 @@ class JCallSite(BaseModel):
     argument_types: List[str]
     return_type: str = ""
     is_static_call: bool
-    is_private: bool 
-    is_public: bool 
-    is_protected: bool 
-    is_unspecified: bool 
+    is_private: bool | None = None
+    is_public: bool | None = None
+    is_protected: bool | None = None
+    is_unspecified: bool | None = None
     is_constructor_call: bool
     start_line: int
     start_column: int
@@ -216,27 +216,23 @@ class JCallable(BaseModel):
         # check first if the class in which this method exists is concrete or not, by looking at the context var
         if context_concrete_class.get():
             # convert annotations to the form GET, POST even if they are @GET or @GET('/ID') etc.
-            annotations_cleaned = [match for annotation in self.annotations for match in
-                                   re.findall(r'@(.*?)(?:\(|$)', annotation)]
+            annotations_cleaned = [match for annotation in self.annotations for match in re.findall(r"@(.*?)(?:\(|$)", annotation)]
 
             param_type_list = [val.type for val in self.parameters]
             # check the param types against known servlet param types
-            if any(substring in string for substring in param_type_list for string in
-                   constants.ENTRY_POINT_METHOD_SERVLET_PARAM_TYPES):
+            if any(substring in string for substring in param_type_list for string in constants.ENTRY_POINT_METHOD_SERVLET_PARAM_TYPES):
                 # check if this method is over-riding (only methods that override doGet / doPost etc. will be flagged as first level entry points)
-                if 'Override' in annotations_cleaned:
+                if "Override" in annotations_cleaned:
                     self.is_entry_point = True
                     return self
 
             # now check the cleaned annotations against known javax ws annotations
-            if any(substring in string for substring in annotations_cleaned for string in
-                   constants.ENTRY_POINT_METHOD_JAVAX_WS_ANNOTATIONS):
+            if any(substring in string for substring in annotations_cleaned for string in constants.ENTRY_POINT_METHOD_JAVAX_WS_ANNOTATIONS):
                 self.is_entry_point = True
                 return self
 
             # check the cleaned annotations against known spring rest method annotations
-            if any(substring in string for substring in annotations_cleaned for string in
-                   constants.ENTRY_POINT_METHOD_SPRING_ANNOTATIONS):
+            if any(substring in string for substring in annotations_cleaned for string in constants.ENTRY_POINT_METHOD_SPRING_ANNOTATIONS):
                 self.is_entry_point = True
                 return self
         return self
@@ -320,16 +316,13 @@ class JType(BaseModel):
     @model_validator(mode="after")
     def check_concrete_entry_point(self):
         if self.is_concrete_class:
-            if any(substring in string for substring in (self.extends_list + self.implements_list)
-                   for string in constants.ENTRY_POINT_SERVLET_CLASSES):
+            if any(substring in string for substring in (self.extends_list + self.implements_list) for string in constants.ENTRY_POINT_SERVLET_CLASSES):
                 self.is_entry_point = True
                 return self
         # Handle spring classes
         # clean annotations - take out @ and any paranehesis along with info in them.
-        annotations_cleaned = [match for annotation in self.annotations for match in
-                               re.findall(r'@(.*?)(?:\(|$)', annotation)]
-        if any(substring in string for substring in annotations_cleaned
-               for string in constants.ENTRY_POINT_CLASS_SPRING_ANNOTATIONS):
+        annotations_cleaned = [match for annotation in self.annotations for match in re.findall(r"@(.*?)(?:\(|$)", annotation)]
+        if any(substring in string for substring in annotations_cleaned for string in constants.ENTRY_POINT_CLASS_SPRING_ANNOTATIONS):
             self.is_entry_point = True
             return self
         # context_concrete.reset()
@@ -388,5 +381,6 @@ class JApplication(BaseModel):
     system_dependency : List[JGraphEdges]
         The edges of the system dependency graph. Default None.
     """
+
     symbol_table: Dict[str, JCompilationUnit]
     system_dependency_graph: List[JGraphEdges] = None

@@ -59,7 +59,7 @@ class JavaAnalysis(SymbolTable, CallGraph):
         self.analysis_backend_path = analysis_backend_path
         self.eager_analysis = eager_analysis
         self.use_graalvm_binary = use_graalvm_binary
-        self.analysis_backend =  analysis_backend
+        self.analysis_backend = analysis_backend
         # Initialize the analysis analysis_backend
         if analysis_backend.lower() == "codeql":
             self.analysis_backend: JCodeQL = JCodeQL(self.project_dir, self.analysis_json_path)
@@ -97,8 +97,6 @@ class JavaAnalysis(SymbolTable, CallGraph):
         JApplication
             The application view of the Java code.
         """
-        if self.source_code:
-            raise NotImplementedError(f"Support for this functionality has not been implemented yet.")
         return self.backend.get_application_view()
 
     def get_symbol_table(self) -> Dict[str, JCompilationUnit]:

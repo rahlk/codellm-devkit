@@ -83,7 +83,7 @@ class CLDK:
             raise CldkInitializationException("Either project_path or source_code must be provided.")
 
         if project_path is not None and source_code is not None:
-            raise CldkInitializationException("Both project_path and source_code are provided. Please provide " "only one.")
+            raise CldkInitializationException("Both project_path and source_code are provided. Please provide only one.")
 
         if self.language == "java":
             return JavaAnalysis(
@@ -131,6 +131,6 @@ class CLDK:
 
         """
         if self.language == "java":
-            return TreesitterSanitizer(source_code=source_code)
+            return TreesitterJava(source_code=source_code)
         else:
             raise NotImplementedError(f"Treesitter parser for {self.language} is not implemented yet.")
