@@ -181,7 +181,7 @@ class JCodeanalyzer:
                 with resources.as_file(resources.files("cldk.analysis.java.codeanalyzer.jar")) as codeanalyzer_jar_path:
                     # Download the codeanalyzer jar if it doesn't exist, update if it's outdated,
                     # do nothing if it's up-to-date.
-                    codeanalyzer_jar_file = self._download_or_update_code_analyzer(codeanalyzer_jar_path)
+                    codeanalyzer_jar_file = codeanalyzer_jar_path / "codeanalyzer.jar"
                     codeanalyzer_exec = shlex.split(f"java -jar {codeanalyzer_jar_file} -v")
         return codeanalyzer_exec
 
